@@ -4,10 +4,13 @@ import {
 } from "recharts";
 import { ClienteData } from "../data/mockData";
 
-interface ChartsProps {
-  months: string[];
+interface BaseChartsProps {
   data: ClienteData[];
   selectedMonth: string;
+}
+
+interface ChartsProps extends BaseChartsProps {
+  months: string[];
 }
 
 function fmtR(v: number) {
@@ -91,7 +94,7 @@ export function LucroChart({ data, months: MONTHS }: ChartsProps) {
   );
 }
 
-export function SistemaChart({ data, selectedMonth }: ChartsProps) {
+export function SistemaChart({ data, selectedMonth }: BaseChartsProps) {
   const sistemas = [...new Set(data.map((d) => d.sistema))].sort();
   const SYS_COLORS: Record<string, string> = { Bitplayer: "#60a5fa", BrPro: "#34d399", NewsTVS: "#a78bfa" };
 
@@ -118,7 +121,7 @@ export function SistemaChart({ data, selectedMonth }: ChartsProps) {
   );
 }
 
-export function PlanosChart({ data }: ChartsProps) {
+export function PlanosChart({ data }: BaseChartsProps) {
   const planosMap: Record<string, number> = {};
   data.forEach((d) => { planosMap[d.plano] = (planosMap[d.plano] ?? 0) + 1; });
   const chartData = Object.entries(planosMap).map(([name, value]) => ({ name, value }));
