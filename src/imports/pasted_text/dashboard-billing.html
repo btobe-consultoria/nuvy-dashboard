@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Faturamento Nuvy</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  /* ── reset & tokens ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0f1117;
+    --surface:   #181c27;
+    --surface2:  #1e2333;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.13);
+    --text:      #e8eaf0;
+    --muted:     #7b82a0;
+    --accent:    #6c7fff;
+    --green:     #34d39a;
+    --red:       #f87171;
+    --amber:     #fbbf24;
+    --bit:       #4f8ef7;
+    --brp:       #34d39a;
+    --news:      #a78bfa;
+    --radius:    10px;
+    --radius-lg: 16px;
+    --mono:      'JetBrains Mono', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── layout ── */
+  .shell { max-width: 1140px; margin: 0 auto; padding: 0 24px 64px; }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px 0 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header-left h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -.3px;
+  }
+  .header-left p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+  .header-right { display: flex; align-items: center; gap: 10px; }
+
+  .btn-refresh {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text); border-radius: var(--radius);
+    padding: 7px 14px; font-size: 13px; cursor: pointer;
+    transition: background .15s;
+  }
+  .btn-refresh:hover { background: #252a3d; }
+
+  #status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--amber); flex-shrink: 0;
+    transition: background .3s;
+  }
+  #status-dot.ok  { background: var(--green); }
+  #status-dot.err { background: var(--red); }
+
+  /* ── loading ── */
+  #loading {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; height: 60vh; gap: 16px; color: var(--muted);
+  }
+  .spinner {
+    width: 36px; height: 36px; border: 3px solid var(--border2);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #dashboard { display: none; }
+
+  /* ── section label ── */
+  .section-label {
+    font-size: 11px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted);
+    margin: 32px 0 14px;
+  }
+
+  /* ── metric cards ── */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--accent-bar, var(--accent));
+  }
+  .card-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .card-value {
+    font-family: var(--mono);
+    font-size: 24px; font-weight: 600; color: var(--text);
+    letter-spacing: -.5px;
+  }
+  .card-sub { font-size: 11px; color: var(--muted); margin-top: 5px; }
+  .card-delta {
+    font-size: 12px; font-weight: 500; margin-top: 4px;
+  }
+  .card-delta.pos { color: var(--green); }
+  .card-delta.neg { color: var(--red); }
+
+  /* ── sistema pills ── */
+  .sys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .sys-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+  }
+  .sys-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .sys-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .sys-name { font-weight: 600; font-size: 14px; }
+  .sys-row {
+    display: flex; justify-content: space-between;
+    font-size: 12px; padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .sys-row:last-child { border-bottom: none; }
+  .sys-key { color: var(--muted); }
+  .sys-val { font-family: var(--mono); font-weight: 500; }
+  .sys-val.green { color: var(--green); }
+  .sys-val.blue  { color: var(--accent); }
+
+  /* ── gráficos ── */
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .charts-grid { grid-template-columns: 1fr; } }
+
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+  }
+  .chart-title { font-size: 13px; font-weight: 500; margin-bottom: 16px; color: var(--muted); }
+  .chart-wrap { position: relative; width: 100%; }
+
+  /* ── tabela de clientes ── */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .table-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .table-header span { font-size: 13px; font-weight: 500; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left; padding: 10px 16px;
+    font-size: 11px; font-weight: 600; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--muted);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  td { padding: 9px 16px; }
+  td.mono { font-family: var(--mono); font-size: 12px; }
+  td.green { color: var(--green); font-family: var(--mono); font-size: 12px; font-weight: 600; }
+  td.red   { color: var(--red);   font-family: var(--mono); font-size: 12px; font-weight: 600; }
+  td.muted { color: var(--muted); font-size: 12px; }
+
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 20px; letter-spacing: .04em;
+  }
+  .badge-bit  { background: rgba(79,142,247,.15); color: var(--bit); }
+  .badge-brp  { background: rgba(52,211,154,.15); color: var(--brp); }
+  .badge-news { background: rgba(167,139,250,.15); color: var(--news); }
+  .badge-plan { background: rgba(255,255,255,.07); color: var(--muted); }
+
+  .pill-ok  { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green); margin-right:5px; }
+  .pill-nd  { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--border2); margin-right:5px; }
+
+  /* ── month selector ── */
+  .month-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+  .mtab {
+    font-size: 12px; padding: 5px 12px; border-radius: 20px;
+    border: 1px solid var(--border2); background: transparent;
+    color: var(--muted); cursor: pointer; transition: all .15s;
+  }
+  .mtab:hover { background: var(--surface2); color: var(--text); }
+  .mtab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* ── insights ── */
+  .insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .insight {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent-bar, var(--accent));
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-size: 13px;
+  }
+  .insight strong { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .07em; }
+
+  /* ── config modal ── */
+  .config-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; padding: 24px;
+  }
+  .config-box {
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: var(--radius-lg); padding: 28px; width: 100%; max-width: 480px;
+  }
+  .config-box h2 { font-size: 16px; margin-bottom: 8px; }
+  .config-box p  { font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.6; }
+  .config-box input {
+    width: 100%; padding: 10px 14px; border-radius: var(--radius);
+    border: 1px solid var(--border2); background: var(--bg);
+    color: var(--text); font-size: 13px; font-family: var(--mono);
+    margin-bottom: 14px; outline: none;
+  }
+  .config-box input:focus { border-color: var(--accent); }
+  .config-box .btn-primary {
+    width: 100%; padding: 10px; border-radius: var(--radius);
+    background: var(--accent); border: none; color: #fff;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .config-box .btn-primary:hover { opacity: .9; }
+  .config-note { font-size: 11px; color: var(--muted); margin-top: 12px; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<!-- CONFIG MODAL -->
+<div class="config-overlay" id="configOverlay">
+  <div class="config-box">
+    <h2>Configurar fonte de dados</h2>
+    <p>Cole a URL de publicação CSV da sua planilha do Google Sheets. A planilha precisa estar publicada em <strong>Arquivo → Compartilhar → Publicar na Web → CSV</strong>.</p>
+    <input type="text" id="csvInput" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv&gid=..." />
+    <button class="btn-primary" onclick="salvarConfig()">Carregar dashboard</button>
+    <p class="config-note">
+      A URL fica salva no seu navegador (localStorage). Nenhum dado sai do seu computador além da requisição direta ao Google.
+    </p>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div class="shell">
+  <header>
+    <div class="header-left">
+      <h1>Faturamento Nuvy</h1>
+      <p id="last-update">Aguardando dados...</p>
+    </div>
+    <div class="header-right">
+      <span id="status-dot"></span>
+      <button class="btn-refresh" onclick="recarregar()">↺ Atualizar</button>
+      <button class="btn-refresh" onclick="abrirConfig()">⚙ Fonte</button>
+    </div>
+  </header>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <span>Carregando dados da planilha...</span>
+  </div>
+
+  <div id="dashboard">
+
+    <!-- CARDS GERAIS -->
+    <p class="section-label">Visão geral</p>
+    <div class="cards" id="cardsGrid">
+      <div class="card" id="card-clientes" style="--accent-bar: var(--accent)">
+        <p class="card-label">Clientes ativos</p>
+        <p class="card-value" id="c-clientes">—</p>
+        <p class="card-sub" id="c-sistemas">—</p>
+      </div>
+      <div class="card" id="card-esperado" style="--accent-bar: var(--bit)">
+        <p class="card-label">Faturamento esperado/mês</p>
+        <p class="card-value" id="c-esperado">—</p>
+        <p class="card-sub">base mensal proporcional</p>
+      </div>
+      <div class="card" id="card-lucro-esp" style="--accent-bar: var(--amber)">
+        <p class="card-label">Lucro esperado/mês</p>
+        <p class="card-value" id="c-lucro-esperado">—</p>
+        <p class="card-sub">base mensal proporcional</p>
+      </div>
+      <div class="card" id="card-realizado" style="--accent-bar: var(--green)">
+        <p class="card-label">Realizado (mês selecionado)</p>
+        <p class="card-value" id="c-realizado">—</p>
+        <p class="card-delta" id="c-realizado-delta"></p>
+      </div>
+      <div class="card" id="card-lucro-real" style="--accent-bar: var(--green)">
+        <p class="card-label">Lucro real (mês)</p>
+        <p class="card-value" id="c-lucro-real">—</p>
+        <p class="card-delta" id="c-lucro-delta"></p>
+      </div>
+      <div class="card" id="card-margem" style="--accent-bar: var(--news)">
+        <p class="card-label">Margem real (mês)</p>
+        <p class="card-value" id="c-margem">—</p>
+        <p class="card-sub">lucro / realizado</p>
+      </div>
+    </div>
+    </div>
+
+    <!-- SELETOR DE MÊS -->
+    <p class="section-label" style="margin-top:32px">Mês de análise</p>
+    <div class="month-tabs" id="monthTabs"></div>
+
+    <!-- GRÁFICOS -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <p class="chart-title">Esperado vs realizado por mês</p>
+        <div class="chart-wrap" style="height:220px"><canvas id="chartEvsR" role="img" aria-label="Esperado vs realizado por mês"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <p class="chart-title">Lucro real por mês</p>
+        <div class="chart-wrap" style="height:220px"><canvas id="chartLucro" role="img" aria-label="Lucro real por mês"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <p class="chart-title">Realizado por sistema (mês selecionado)</p>
+        <div class="chart-wrap" style="height:220px"><canvas id="chartSys" role="img" aria-label="Realizado por sistema"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <p class="chart-title">Distribuição de planos</p>
+        <div class="chart-wrap" style="height:220px"><canvas id="chartPlanos" role="img" aria-label="Distribuição de planos"></canvas></div>
+      </div>
+    </div>
+
+    <!-- POR SISTEMA -->
+    <p class="section-label">Por sistema (mês selecionado)</p>
+    <div class="sys-grid" id="sysGrid"></div>
+
+    <!-- INSIGHTS -->
+    <p class="section-label">Insights</p>
+    <div class="insights" id="insights"></div>
+
+    <!-- TABELA DE CLIENTES -->
+    <p class="section-label">Clientes</p>
+    <div class="table-card">
+      <div class="table-header">
+        <span>Todos os clientes</span>
+        <span id="table-meta" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Sistema</th>
+              <th>Cliente</th>
+              <th>Plano</th>
+              <th>Esperado</th>
+              <th>Custo</th>
+              <th>Lucro esp.</th>
+              <th id="th-mes">Mês</th>
+              <th>Lucro real</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /dashboard -->
+</div><!-- /shell -->
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────
+const STORAGE_KEY = 'nuvy_csv_url';
+const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSsL2i3DYRMvSooK4FEByWW65x06a5vKZcFJU2XMKyBjLhznjkgvGv76QQMzq4wTlJBEldtlWnfkVD2/pub?gid=1832138851&single=true&output=csv';
+const DIVISOR = { mensal:1, trimestral:3, semestral:6, anual:12 };
+const SYS_COLOR = { Bitplayer:'var(--bit)', BrPro:'var(--brp)', NewsTVS:'var(--news)' };
+const SYS_CLASS = { Bitplayer:'badge-bit', BrPro:'badge-brp', NewsTVS:'badge-news' };
+
+let chartEvsR, chartLucro, chartSys, chartPlanos;
+let DATA = [];
+let MONTHS = [];
+let selectedMonth = null;
+
+// ── INIT ─────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const url = localStorage.getItem(STORAGE_KEY) || DEFAULT_URL;
+  document.getElementById('configOverlay').style.display = 'none';
+  carregar(url);
+});
+
+function salvarConfig() {
+  const url = document.getElementById('csvInput').value.trim();
+  if (!url) return;
+  localStorage.setItem(STORAGE_KEY, url);
+  document.getElementById('configOverlay').style.display = 'none';
+  document.getElementById('loading').style.display = 'flex';
+  carregar(url);
+}
+
+function abrirConfig() {
+  const url = localStorage.getItem(STORAGE_KEY) || '';
+  document.getElementById('csvInput').value = url;
+  document.getElementById('configOverlay').style.display = 'flex';
+}
+
+function recarregar() {
+  const url = localStorage.getItem(STORAGE_KEY);
+  if (!url) { abrirConfig(); return; }
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('loading').style.display = 'flex';
+  carregar(url);
+}
+
+// ── FETCH CSV ────────────────────────────────────────────────
+async function carregar(url) {
+  setStatus('loading');
+  try {
+    const res = await fetch(url + '&cachebust=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    parseCSV(text);
+    renderDashboard();
+    setStatus('ok');
+    document.getElementById('last-update').textContent =
+      'Atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+  } catch(e) {
+    setStatus('err');
+    document.getElementById('loading').innerHTML =
+      '<p style="color:var(--red)">Erro ao carregar dados.<br><small>' + e.message + '</small></p>' +
+      '<button class="btn-refresh" onclick="abrirConfig()">⚙ Reconfigurar</button>';
+  }
+}
+
+function setStatus(s) {
+  const d = document.getElementById('status-dot');
+  d.className = s === 'ok' ? 'ok' : s === 'err' ? 'err' : '';
+}
+
+// ── PARSE CSV ────────────────────────────────────────────────
+// Estrutura esperada:
+// Linha 1: cabeçalhos de grupo (ignorada)
+// Linha 2: Sistema, Cliente, Plano, Valor Pago, Custo, Lucro, [meses...]
+// Linha 3+: dados
+
+function parseCSV(text) {
+  const rows = text.trim().split('\n').map(r => {
+    const result = [];
+    let inQuote = false, cur = '';
+    for (let i = 0; i < r.length; i++) {
+      const c = r[i];
+      if (c === '"') { inQuote = !inQuote; }
+      else if (c === ',' && !inQuote) { result.push(cur.trim()); cur = ''; }
+      else { cur += c; }
+    }
+    result.push(cur.trim());
+    return result;
+  });
+
+  // Linha 2 = headers (índice 1)
+  const headers = rows[1];
+
+  // Colunas fixas: 0=Sistema,1=Cliente,2=Plano,3=ValorPlano(ignorar),4=Custo
+  // A partir do índice 5: pares (ValorMês, Realizado?) para cada mês
+  MONTHS = [];
+  for (let i = 5; i < headers.length; i += 2) {
+    const h = (headers[i] || '').trim();
+    if (h) MONTHS.push(h);
+  }
+
+  DATA = [];
+  for (let i = 2; i < rows.length; i++) {
+    const r = rows[i];
+    const sistema = (r[0] || '').trim();
+    if (!sistema || sistema.toLowerCase() === 'totais' || sistema === '') continue;
+
+    const cliente  = (r[1] || '').trim();
+    const plano    = (r[2] || '').toLowerCase().trim();
+    const custo    = parseMoeda(r[4]);
+
+    const meses = {};
+    MONTHS.forEach((m, idx) => {
+      const colValor     = 5 + idx * 2;
+      const colRealizado = 5 + idx * 2 + 1;
+      const valorEsp  = parseMoeda(r[colValor]);
+      const realizado = (r[colRealizado] || '').trim().toUpperCase();
+      // null = sem dado; true = pago; false = pendente (valor esperado existe mas não pagou)
+      meses[m] = {
+        esperado: valorEsp,
+        pago: realizado === 'OK' || realizado === 'SIM',
+      };
+    });
+
+    // Lucro esperado mensal = valor esperado do mês / divisor do plano
+    const div = DIVISOR[plano] || 1;
+    const primeiroMes = MONTHS[0];
+    const esperadoPadrao = meses[primeiroMes] ? meses[primeiroMes].esperado : 0;
+    const lucroEsp = esperadoPadrao - custo;
+
+    DATA.push({ sistema, cliente, plano, custo, lucroEsp, meses });
+  }
+
+  // Mês padrão = primeiro com algum OK
+  selectedMonth = MONTHS.find(m => DATA.some(d => d.meses[m] && d.meses[m].pago))
+    || MONTHS[0];
+}
+
+function parseMoeda(v) {
+  if (!v) return 0;
+  return parseFloat(v.replace(/R\$\s?/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+}
+
+// ── RENDER ────────────────────────────────────────────────────
+function renderDashboard() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+
+  renderTabs();
+  renderAll();
+}
+
+function renderTabs() {
+  const container = document.getElementById('monthTabs');
+  container.innerHTML = '';
+  MONTHS.forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'mtab' + (m === selectedMonth ? ' active' : '');
+    btn.textContent = m;
+    btn.onclick = () => { selectedMonth = m; renderAll(); };
+    container.appendChild(btn);
+  });
+}
+
+function renderAll() {
+  // atualiza tabs
+  document.querySelectorAll('.mtab').forEach(b => {
+    b.classList.toggle('active', b.textContent === selectedMonth);
+  });
+
+  const mes = selectedMonth;
+
+  const comDado  = DATA.filter(d => d.meses[mes]);
+  const pagaram  = comDado.filter(d => d.meses[mes].pago);
+  const pendente = comDado.filter(d => !d.meses[mes].pago);
+
+  const totalEsperado  = comDado.reduce((s, d) => s + d.meses[mes].esperado, 0);
+  const totalRealizado = pagaram.reduce((s, d) => s + d.meses[mes].esperado, 0);
+  const totalCusto     = pagaram.reduce((s, d) => s + d.custo, 0);
+  const lucroReal      = totalRealizado - totalCusto;
+  const lucroEspMes    = comDado.reduce((s, d) => s + (d.meses[mes].esperado - d.custo), 0);
+
+  const pctRealizado = totalEsperado > 0
+    ? ((totalRealizado / totalEsperado) * 100).toFixed(1) : 0;
+  const margem = totalRealizado > 0
+    ? ((lucroReal / totalRealizado) * 100).toFixed(1) : 0;
+
+  // Faturamento esperado mensal global (proporcional por plano)
+  const totalEsperadoMensal = DATA.reduce((s, d) => {
+    const esp = d.meses[mes] ? d.meses[mes].esperado : 0;
+    return s + esp / (DIVISOR[d.plano] || 1);
+  }, 0);
+
+  // ── CARDS ──
+  document.getElementById('c-clientes').textContent = DATA.length;
+  const sistemas = [...new Set(DATA.map(d => d.sistema))];
+  document.getElementById('c-sistemas').textContent = sistemas.length + ' sistemas';
+  document.getElementById('c-esperado').textContent = fmt(totalEsperado);
+  document.getElementById('c-lucro-esperado').textContent = fmt(lucroEspMes);
+  document.getElementById('c-realizado').textContent = fmt(totalRealizado);
+  const deltaEl = document.getElementById('c-realizado-delta');
+  deltaEl.textContent = pctRealizado + '% do esperado';
+  deltaEl.className = 'card-delta ' + (pctRealizado >= 80 ? 'pos' : 'neg');
+  document.getElementById('c-lucro-real').textContent = fmt(lucroReal);
+  const lucroD = document.getElementById('c-lucro-delta');
+  lucroD.textContent = 'esperado ' + fmt(lucroEspMes);
+  lucroD.className = 'card-delta ' + (lucroReal >= lucroEspMes ? 'pos' : 'neg');
+  document.getElementById('c-margem').textContent = margem + '%';
+
+  // ── GRÁFICOS ──
+  renderChartEvsR();
+  renderChartLucro();
+  renderChartSys(mes);
+  renderChartPlanos();
+
+  // ── SISTEMAS ──
+  renderSysGrid(mes);
+
+  // ── INSIGHTS ──
+  renderInsights(mes);
+
+  // ── TABELA ──
+  renderTable(mes);
+}
+
+// Chart: Esperado vs Realizado por mês
+function renderChartEvsR() {
+  const esperados  = MONTHS.map(m => DATA.reduce((s, d) => s + (d.meses[m] ? d.meses[m].esperado : 0), 0));
+  const realizados = MONTHS.map(m => DATA.filter(d => d.meses[m] && d.meses[m].pago).reduce((s, d) => s + d.meses[m].esperado, 0));
+
+  if (chartEvsR) chartEvsR.destroy();
+  chartEvsR = new Chart(document.getElementById('chartEvsR'), {
+    type: 'bar',
+    data: {
+      labels: MONTHS,
+      datasets: [
+        { label: 'Esperado', data: esperados, backgroundColor: 'rgba(108,127,255,0.3)', borderColor: '#6c7fff', borderWidth: 1.5, borderRadius: 4 },
+        { label: 'Realizado', data: realizados, backgroundColor: 'rgba(52,211,154,0.7)', borderColor: '#34d39a', borderWidth: 0, borderRadius: 4 }
+      ]
+    },
+    options: chartOpts({ currency: true })
+  });
+}
+
+// Chart: Lucro real por mês
+function renderChartLucro() {
+  const lucros = MONTHS.map(m => {
+    const pagaram = DATA.filter(d => d.meses[m] && d.meses[m].pago);
+    return pagaram.reduce((s, d) => s + d.meses[m].esperado - d.custo, 0);
+  });
+
+  if (chartLucro) chartLucro.destroy();
+  chartLucro = new Chart(document.getElementById('chartLucro'), {
+    type: 'line',
+    data: {
+      labels: MONTHS,
+      datasets: [{
+        label: 'Lucro real',
+        data: lucros,
+        borderColor: '#34d39a',
+        backgroundColor: 'rgba(52,211,154,0.08)',
+        pointBackgroundColor: '#34d39a',
+        pointRadius: 4,
+        tension: 0.35,
+        fill: true
+      }]
+    },
+    options: chartOpts({ currency: true })
+  });
+}
+
+// Chart: Realizado por sistema no mês
+function renderChartSys(mes) {
+  const sistemas = [...new Set(DATA.map(d => d.sistema))].sort();
+  const vals = sistemas.map(s =>
+    DATA.filter(d => d.sistema === s && d.meses[mes] && d.meses[mes].pago)
+      .reduce((sum, d) => sum + d.meses[mes].esperado, 0)
+  );
+  const colors = sistemas.map(s =>
+    s === 'Bitplayer' ? '#4f8ef7' : s === 'BrPro' ? '#34d39a' : '#a78bfa'
+  );
+
+  if (chartSys) chartSys.destroy();
+  chartSys = new Chart(document.getElementById('chartSys'), {
+    type: 'bar',
+    data: {
+      labels: sistemas,
+      datasets: [{ label: 'Realizado', data: vals, backgroundColor: colors, borderRadius: 6 }]
+    },
+    options: chartOpts({ currency: true })
+  });
+}
+
+// Chart: Distribuição de planos (donut)
+function renderChartPlanos() {
+  const planosMap = {};
+  DATA.forEach(d => { const p = d.plano || 'outro'; planosMap[p] = (planosMap[p] || 0) + 1; });
+  const labels = Object.keys(planosMap);
+  const vals   = labels.map(p => planosMap[p]);
+  const bgColors = ['#6c7fff','#34d39a','#fbbf24','#f87171','#a78bfa'];
+
+  if (chartPlanos) chartPlanos.destroy();
+  chartPlanos = new Chart(document.getElementById('chartPlanos'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: vals, backgroundColor: bgColors, borderWidth: 0, hoverOffset: 6 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '60%',
+      plugins: { legend: { position: 'bottom', labels: { color: '#7b82a0', font: { size: 11 }, padding: 12, boxWidth: 10 } } }
+    }
+  });
+}
+
+function renderSysGrid(mes) {
+  const container = document.getElementById('sysGrid');
+  container.innerHTML = '';
+  const sistemas = [...new Set(DATA.map(d => d.sistema))].sort();
+
+  sistemas.forEach(s => {
+    const clientes  = DATA.filter(d => d.sistema === s);
+    const comDado   = clientes.filter(d => d.meses[mes]);
+    const pagaram   = comDado.filter(d => d.meses[mes].pago);
+    const realizado = pagaram.reduce((sum, d) => sum + d.meses[mes].esperado, 0);
+    const custo     = pagaram.reduce((sum, d) => sum + d.custo, 0);
+    const lucroReal = realizado - custo;
+    const esperado  = comDado.reduce((sum, d) => sum + d.meses[mes].esperado, 0);
+    const margem    = realizado > 0 ? ((lucroReal / realizado) * 100).toFixed(1) : 0;
+    const cor       = s === 'Bitplayer' ? '#4f8ef7' : s === 'BrPro' ? '#34d39a' : '#a78bfa';
+
+    container.innerHTML += `
+      <div class="sys-card">
+        <div class="sys-header">
+          <div class="sys-dot" style="background:${cor}"></div>
+          <span class="sys-name">${s}</span>
+        </div>
+        <div class="sys-row"><span class="sys-key">Clientes</span><span class="sys-val">${clientes.length}</span></div>
+        <div class="sys-row"><span class="sys-key">Esperado</span><span class="sys-val blue">${fmt(esperado)}</span></div>
+        <div class="sys-row"><span class="sys-key">Realizado</span><span class="sys-val">${fmt(realizado)}</span></div>
+        <div class="sys-row"><span class="sys-key">Custo</span><span class="sys-val">${fmt(custo)}</span></div>
+        <div class="sys-row"><span class="sys-key">Lucro real</span><span class="sys-val green">${fmt(lucroReal)}</span></div>
+        <div class="sys-row"><span class="sys-key">Margem</span><span class="sys-val">${margem}%</span></div>
+        <div class="sys-row"><span class="sys-key">Pagaram</span><span class="sys-val">${pagaram.length}/${clientes.length}</span></div>
+      </div>`;
+  });
+}
+
+function renderInsights(mes) {
+  const container = document.getElementById('insights');
+  container.innerHTML = '';
+  const items = [];
+
+  const pagaram  = DATA.filter(d => d.meses[mes] && d.meses[mes].pago);
+  const pendente = DATA.filter(d => d.meses[mes] && !d.meses[mes].pago);
+
+  if (pagaram.length > 0) {
+    const melhor = pagaram.reduce((a, b) =>
+      (b.meses[mes].esperado - b.custo) > (a.meses[mes].esperado - a.custo) ? b : a);
+    items.push({ cor: 'var(--green)', titulo: 'Maior lucro no mês', texto: `${melhor.cliente} (${melhor.sistema}) — ${fmt(melhor.meses[mes].esperado - melhor.custo)} de lucro real` });
+  }
+
+  const sistemas = [...new Set(DATA.map(d => d.sistema))];
+  const lucrosSis = sistemas.map(s => {
+    const p = DATA.filter(d => d.sistema === s && d.meses[mes] && d.meses[mes].pago);
+    return { s, l: p.reduce((sum, d) => sum + d.meses[mes].esperado - d.custo, 0) };
+  }).sort((a,b) => b.l - a.l);
+  if (lucrosSis.length) items.push({ cor: 'var(--accent)', titulo: 'Sistema mais rentável', texto: `${lucrosSis[0].s} com ${fmt(lucrosSis[0].l)} de lucro real em ${mes}` });
+
+  const pct = DATA.length > 0 ? ((pendente.length / DATA.length) * 100).toFixed(0) : 0;
+  items.push({ cor: pct > 20 ? 'var(--red)' : 'var(--amber)', titulo: 'Pendentes em ' + mes, texto: `${pendente.length} de ${DATA.length} clientes ainda não pagaram (${pct}%)` });
+
+  const lucrosMes = MONTHS.map(m => ({
+    m, l: DATA.filter(d => d.meses[m] && d.meses[m].pago).reduce((s, d) => s + d.meses[m].esperado - d.custo, 0)
+  })).filter(x => x.l > 0);
+  if (lucrosMes.length) {
+    const melhorMes = lucrosMes.reduce((a,b) => b.l > a.l ? b : a);
+    items.push({ cor: 'var(--news)', titulo: 'Mês mais lucrativo', texto: `${melhorMes.m} com ${fmt(melhorMes.l)} de lucro real acumulado` });
+  }
+
+  items.forEach(it => {
+    container.innerHTML += `<div class="insight" style="--accent-bar:${it.cor}"><strong>${it.titulo}</strong>${it.texto}</div>`;
+  });
+}
+
+// ── TABELA ────────────────────────────────────────────────────
+function renderTable(mes) {
+  document.getElementById('th-mes').textContent = mes;
+  document.getElementById('table-meta').textContent = DATA.length + ' clientes';
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+
+  DATA.forEach(d => {
+    const dadoMes  = d.meses[mes];
+    const esperado = dadoMes ? dadoMes.esperado : 0;
+    const pago     = dadoMes && dadoMes.pago;
+    const lucroReal = pago ? esperado - d.custo : null;
+    const cls = pago ? (lucroReal >= 0 ? 'green' : 'red') : 'muted';
+
+    tbody.innerHTML += `<tr>
+      <td><span class="badge ${SYS_CLASS[d.sistema] || ''}">${d.sistema}</span></td>
+      <td>${d.cliente}</td>
+      <td><span class="badge badge-plan">${d.plano}</span></td>
+      <td class="mono">${fmt(esperado)}</td>
+      <td class="mono">${fmt(d.custo)}</td>
+      <td class="mono">${fmt(esperado - d.custo)}</td>
+      <td class="mono">${pago ? fmt(esperado) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td class="${cls}">${lucroReal !== null ? fmt(lucroReal) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${pago
+        ? '<span class="pill-ok"></span>Pago'
+        : '<span class="pill-nd"></span><span style="color:var(--muted)">Pendente</span>'
+      }</td>
+    </tr>`;
+  });
+}
+
+function fmt(v) {
+  return 'R$' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function chartOpts({ currency = false, stacked = false } = {}) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: { color: '#7b82a0', font: { size: 11 }, padding: 10, boxWidth: 10 }
+      }
+    },
+    scales: {
+      x: {
+        stacked,
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { color: '#7b82a0', font: { size: 11 }, autoSkip: false, maxRotation: 45 }
+      },
+      y: {
+        stacked,
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: {
+          color: '#7b82a0', font: { size: 11 },
+          callback: currency ? v => 'R$' + v.toLocaleString('pt-BR') : undefined
+        }
+      }
+    }
+  };
+}
+</script>
+</body>
+</html>
